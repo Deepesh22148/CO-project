@@ -1,5 +1,8 @@
 # list and dictionary containing data used for generating binary code
 # dictionary containing opcode
+import re
+import sys
+
 opcode = {'add': '00000', 'sub': '00001', 'mov': '00011', 'ld': '00100', 'st': '00101', 'mul': '00110',
           'div': '00111', 'xor': '01010', 'or': '01011', 'and': '01100', 'not': '01101', 'cmp': '01110', 'jmp': '01111',
           'jlt': '11100', 'jgt': '11101', 'je': '11111', 'hlt': '11010'}
@@ -44,46 +47,55 @@ def filewriter(s):
     f.write("\n")
     f.close()
 
+def assemblywriter(s):
+    f = open('Assembler.txt', 'a')
+    f.write(s)
+    f.write("\n")
+    f.close()
+
+def is_binary(string):
+    return re.match(r'^[01]+$', string) is not None
+
 
 def varcreater(variableline):
     global codewithdollar, codelinewithopcode, varcode, labelline
-    k = len(codewithdollar) + len(codelinewithopcode) + len(labelline)
+    k = len(codewithdollar) + len(codelinewithopcode) + len(labelline) + len(faultyline)
     for i in variableline:
-            j = i.split(' ')
-            code = str(bin(k))[2:]
-            if len(code) < 7:
-                zero = (7 - len(code)) * str(0)
-                s = zero
-                s += code
-            elif len(code) == 7:
-                s = code
-            else:
-                s = "Invalid"
-            varcode[j[1]] = s
-            k += 1
+        j = i.split(' ')
+        code = str(bin(k))[2:]
+        if len(code) < 7:
+            zero = (7 - len(code)) * str(0)
+            s = zero
+            s += code
+        elif len(code) == 7:
+            s = code
+        else:
+            s = "Invalid"
+        varcode[j[1]] = s
+        k += 1
 
 
 def labelcreator():
     global label, labelline, codeline, codelinewithopcode, codewithdollar
     c = 0
     for i in codeline:
-        j = i.split(' ')
+        j = i.split(':')
         if i in codelinewithopcode:
             c += 1
         elif i in codewithdollar:
             c += 1
-        elif j[0][:-1] in label:
+        elif j[0] in label:
             t = 0
-
             # verifying label is it used as a variable
             for k in labelline:
-                line = k.split(': ')
-                if j[0][:-1] == line[0]:
+                line = k.split(':')
+                a = re.sub(r'^\s+', '', line[1])
+                if j[0] == line[0]:
                     t += 1
             if t == 0 and (varcode.get(j[0][:-1]) is not None):
-                labcode[j[0][:-1]] = 'variableusage'
+                labcode[j[0]] = 'variableusage'
             elif t == 0:
-                labcode[j[0][:-1]] = 'general'
+                labcode[j[0]] = 'general'
             elif t == 1:
                 code = str(bin(c)[2:])
                 if len(code) < 7:
@@ -94,15 +106,19 @@ def labelcreator():
                     s = code
                 else:
                     s = "Invalid"
-                labcode[j[0][:-1]] = s
+                labcode[j[0]] = s
             else:
-                labcode[j[0][:-1]] = 'toomanylabel'
+                labcode[j[0]] = 'toomanylabel'
+            c += 1
+        elif i in faultyline:
+            c += 1
 
 
 # this includes add, sub, mul ,xor, and ,or
 def typeA(line):
+    line1 = line.replace('\t', ' ')
     global varline, faultyline
-    lineforA = line.split(' ')
+    lineforA = line1.split(' ')
     if len(lineforA) != 4:
         s = 'General Syntax Error: Field does not contain sufficient number of elements'
         filewriter(s)
@@ -130,7 +146,8 @@ def typeA(line):
 
 # this includes mov, ls and rs
 def typeB(line):
-    lineforB = line.split(' ')
+    line1 = line.replace('\t', ' ')
+    lineforB = line1.split(' ')
     if len(lineforB) != 3:
         s = 'General Syntax Error: Field does not contain sufficient number of items'
         filewriter(s)
@@ -187,7 +204,8 @@ def typeB(line):
 
 
 def typeC(line):
-    lineforC = line.split(' ')
+    line1 = line.replace('\t', ' ')
+    lineforC = line1.split(' ')
     if len(lineforC) != 3:
         s = 'General Syntax Error: Field does not contain sufficient number of items'
         filewriter(s)
@@ -231,7 +249,8 @@ def typeC(line):
 
 
 def typeD(line):
-    lineforD = line.split(' ')
+    line1 = line.replace('\t', ' ')
+    lineforD = line1.split(' ')
     if len(lineforD) != 3:
         s = 'General Syntax Error: Field does not contain sufficient number of items'
         filewriter(s)
@@ -251,7 +270,7 @@ def typeD(line):
 
             k = varcode.get(lineforD[2])
             if k is None:
-                s = 'Syntax Error : variable does not exist'
+                s = f'Syntax Error : "{lineforD[2]}" variable does not exist'
                 filewriter(s)
             elif k == 'Invalid':
                 s = 'Syntax Error : code length is just large'
@@ -262,7 +281,8 @@ def typeD(line):
 
 
 def typeE(line):
-    lineforE = line.split(' ')
+    line1 = line.replace('\t', ' ')
+    lineforE = line1.split(' ')
     if len(lineforE) != 2:
         s = 'General Syntax Error: Field does not contain sufficient number of items'
         filewriter(s)
@@ -302,7 +322,8 @@ def typeE(line):
 
 
 def typeF(line):
-    lineforF = line.split(' ')
+    line1 = line.replace('\t', ' ')
+    lineforF = line1.split(' ')
     if len(lineforF) != 1:
         s = 'General Syntax Error: Field does not contain sufficient number of items'
         filewriter(s)
@@ -312,6 +333,13 @@ def typeF(line):
         filewriter(s)
 
 
+# Taking input and storing it in Assembler
+lines = sys.stdin.readlines()
+f = open('Assembler.txt','w')
+f.close()
+for i in lines:
+    assemblywriter(i)
+    
 # file management
 Assembler = open('Assembler.txt', 'r')
 a = Assembler.readlines()
@@ -322,18 +350,18 @@ for i in a:
     if len(old) != 0:
         codeline.append(old)
 
-non_var=0
+non_var = 0
 # taking care of all the cases except of label line and faulty line
 for i in codeline:
     a = i.split(' ')
     if ('$' in i) and (a[0] in opcodedollar.keys()):
         codewithdollar.append(i)
-        non_var+=1
+        non_var += 1
     elif a[0] in opcode.keys():
         codelinewithopcode.append(i)
-        non_var+=1
+        non_var += 1
     elif a[0] == 'var' and (len(a) == 2):
-        if non_var!=0:
+        if non_var != 0:
             pass
         else:
             varline.append(i)
@@ -357,6 +385,75 @@ for i in otherline:
 varcreater(varline)
 labelcreator()
 result = -1
+
+# label correction
+for i in range(len(codeline)):
+    if codeline[i] in codelinewithopcode:
+        splitter = codeline[i].split(' ')
+        t = codetype.get(splitter[0])
+        if t == 'A':
+            pass
+        elif t == 'B':
+            pass
+        elif t == 'C':
+            pass
+        elif t == 'D':
+            pass
+        elif t == 'E':
+            pass
+        elif t == 'F':
+            pass
+            result = i
+            break
+    elif codeline[i] in codewithdollar:
+        pass
+    elif codeline[i] in labelline:
+        j = codeline[i].split(':')
+        p = re.sub(r'^\s+', '', j[1])
+        splitter = p.split(' ')
+        if '$' in codeline[i]:
+            t = codetypedollar.get(splitter[0])
+        else:
+            t = codetype.get(splitter[0])
+        if t == 'A':
+            pass
+        elif t == 'B':
+            pass
+        elif t == 'C':
+            pass
+        elif t == 'D':
+            pass
+        elif t == 'E':
+            pass
+        elif t == 'F':
+            result = i
+            break
+
+    elif codeline[i] in faultyline:
+        if codeline[i][0] == " ":
+            a = re.sub(r'^\s+', '', codeline[i])
+            splitter = a.split(' ')
+            t = codetype.get(splitter[0])
+            if t == 'E':
+                label.append(a.split(" ")[1])
+                labelcreator()
+            elif t == 'F':
+                result = i
+                break
+        elif ":" in codeline[i]:
+            if i not in labelline:
+                labelline.append(codeline[i])
+            newline = codeline[i].split(":")[1]
+            a = re.sub(r'^\s+', '', newline)
+            splitter = a.split(' ')
+            t = codetype.get(splitter[0])
+            if t == 'E':
+                label.append(a.split(" ")[1])
+                labelcreator()
+            elif t == 'F':
+                break
+
+# demo testing end
 for i in range(len(codeline)):
     if codeline[i] in codelinewithopcode:
         splitter = codeline[i].split(' ')
@@ -378,8 +475,8 @@ for i in range(len(codeline)):
     elif codeline[i] in codewithdollar:
         typeB(codeline[i])
     elif codeline[i] in labelline:
-        j = codeline[i].split(': ')
-        p = j[1]
+        j = codeline[i].split(':')
+        p = re.sub(r'^\s+', '', j[1])
         splitter = p.split(' ')
         if '$' in codeline[i]:
             t = codetypedollar.get(splitter[0])
@@ -399,46 +496,117 @@ for i in range(len(codeline)):
             typeF(p)
             result = i
             break
-    elif codeline[i].split(" ")[0]=='var' and len(codeline[i].split(" "))==2:
+    elif codeline[i].split(" ")[0] == 'var' and len(codeline[i].split(" ")) == 2:
         a = varcode.get(codeline[i].split(" ")[1])
-        if a == None:
+        if a is None:
             s = "Syntax Error: Variable should be declared at the beginning"
             filewriter(s)
     elif codeline[i] in faultyline:
         if codeline[i][0] == " ":
-            #present of tab
-            s = codeline[i].count(" ")
-            a = codeline[i].split(" "*(s))
-            splitter = a[1].split(' ')
-            t = codetype.get(splitter[0])
+            a = re.sub(r'^\s+', '', codeline[i])
+            splitter = a.split(' ')
+            if '$' in codeline[i]:
+                t = codetypedollar.get(splitter[0])
+            else:
+                t = codetype.get(splitter[0])
             if t == 'A':
-                typeA(a[1])
+                typeA(a)
             elif t == 'B':
-                typeB(a[1])
+                typeB(a)
             elif t == 'C':
-                typeC(a[1])
+                typeC(a)
             elif t == 'D':
-                typeD(a[1])
+                typeD(a)
             elif t == 'E':
-                label.append(a[1].split(" ")[1])
+                label.append(a.split(" ")[1])
                 labelcreator()
-                typeE(a[1])
+                typeE(a)
             elif t == 'F':
-                typeF(a[1])
+                typeF(a)
                 result = i
                 break
-
+        elif ":" in faultyline:
+            if i not in labelline:
+                labelline.append(codeline[i])
+            newline = codeline[i].split(":")[1]
+            a = re.sub(r'^\s+', '', newline)
+            splitter = a.split(' ')
+            if '$' in codeline[i]:
+                t = codetypedollar.get(splitter[0])
+            else:
+                t = codetype.get(splitter[0])
+            if t == 'A':
+                typeA(a)
+            elif t == 'B':
+                typeB(a)
+            elif t == 'C':
+                typeC(a)
+            elif t == 'D':
+                typeD(a)
+            elif t == 'E':
+                label.append(a.split(" ")[1])
+                labelcreator()
+                typeE(a)
+            elif t == 'F':
+                typeF(a)
+                result = i
+                break
+        else:
+            line1 = codeline[i].replace('\t', ' ')
+            a = re.sub(r'^\s+', '', line1)
+            splitter = a.split(' ')
+            if '$' in codeline[i]:
+                t = codetypedollar.get(splitter[0])
+            else:
+                t = codetype.get(splitter[0])
+            if t == 'A':
+                typeA(a)
+            elif t == 'B':
+                typeB(a)
+            elif t == 'C':
+                typeC(a)
+            elif t == 'D':
+                typeD(a)
+            elif t == 'E':
+                label.append(a.split(" ")[1])
+                labelcreator()
+                typeE(a)
+            elif t == 'F':
+                typeF(a)
+                result = i
+                break
+            else:
+                s = f'General Syntax Error: var "{codeline[i]}" is not present'
+                filewriter(s)
 
 c = 0
 for i in codeline:
     a = i.split(" ")
     if 'hlt' in a:
-        c +=1
+        c += 1
 
-if c==0:
+if c == 0:
     s = "General Syntax Error: hlt not present"
     filewriter(s)
 
-if result != (len(codeline)-1):
+if result != (len(codeline) - 1):
     s = "Syntax Error :Can't execute lines after hlt"
     filewriter(s)
+
+binaryline = []
+errorline = []
+
+f = open('Display.txt', 'r')
+for j in f.readlines():
+    i = j.replace("\n", "")
+    if is_binary(i):
+        binaryline.append(i)
+    else:
+        errorline.append(i)
+
+f.close()
+if len(errorline) == 0:
+    for i in binaryline:
+        print(i)
+else:
+    print(errorline[0], end="")
